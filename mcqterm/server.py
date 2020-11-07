@@ -8,7 +8,8 @@ from pathlib import Path
 
 import structlog
 
-from .mcq import run_mcq
+from .mcq import run_mcq as run_mcq_v1
+from .mcq2 import run_mcq as run_mcq_v2
 from .ptutils import process_to_app_session
 from .ssh import create_user_claimable_ssh_server
 
@@ -25,6 +26,7 @@ async def run_mcq_in_ssh_process(process):
         try:
             config = process.get_extra_info("extra_config")
             username = process.get_extra_info("username")
+            run_mcq = run_mcq_v1 if config.app_version == 1 else run_mcq_v2
             result = await run_mcq(config.mcq_filename, config.result_dir, username)
 
         # Make sure dangerous exceptions do not leak out of the app session
@@ -90,12 +92,16 @@ def main(args=None):
     parser.add_argument("--bind", "-b", type=str, default="localhost")
     parser.add_argument("--user-claim-password", "-u", type=str, default=None)
     parser.add_argument("--external-address", "-e", type=str, default=None)
-    parser.add_argument("--authorized-keys-dir", "-a", type=Path, default=Path("authorized_keys"))
+    parser.add_argument(
+        "--authorized-keys-dir", "-a", type=Path, default=Path("authorized_keys")
+    )
     parser.add_argument("--server-host-key", "-s", type=Path, default=None)
     parser.add_argument("--result-dir", "-r", type=Path, default=Path("results"))
-    parser.add_argument("mcq_filename", metavar="MCQ_FILE", type=Path, default=None)
+    parser.add_argument("--app-version", "-v", type=int, default=2)
+    parser.add_argument("mcq_filename", metavar="MCQ_FILE", type=Path)
     namespace = parser.parse_args(args)
     assert namespace.mcq_filename.exists()
+    assert namespace.app_version in (1, 2)
     return asyncio.run(
         run_mcq_ssh_server(
             bind=namespace.bind,

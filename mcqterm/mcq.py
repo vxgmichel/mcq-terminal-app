@@ -2,14 +2,10 @@
 An MCQ prompt-toolkit application.
 """
 
-import json
-import string
 import asyncio
-import functools
-import subprocess
+import argparse
 from pathlib import Path
 from functools import partial
-from collections import namedtuple
 
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.validation import Validator
@@ -18,19 +14,7 @@ from prompt_toolkit import PromptSession, ANSI, HTML
 from prompt_toolkit.application import get_app_session
 from prompt_toolkit.formatted_text import to_formatted_text
 
-
-@functools.lru_cache(maxsize=None)
-def md_render(source, term, width, light=False):
-    theme = "light" if light else "dark"
-    result = subprocess.run(
-        f"glow -s {theme} -w {width - 3} -",
-        shell=True,
-        capture_output=True,
-        input=source,
-        text=True,
-        env={"TERM": term},
-    )
-    return result.stdout
+from .mcqcommon import parse_mcq, read_json, write_json, md_render
 
 
 def mcq_validate(answer_set, text):
@@ -45,43 +29,7 @@ def mcq_validator(answer):
     )
 
 
-def parse_mcq(filename):
-
-    # Read data file
-    with open(filename) as f:
-        data = f.read()
-
-    # Extract title, description and questions
-    header, *questions, footer = map(str.strip, data.split("\n---\n"))
-    title, _, *description = header.splitlines()
-    title = title.strip().strip("#")
-    description = "\n".join(description).strip()
-    footer = footer.strip()
-
-    # Loop over questions
-    questions_result = []
-    answers_result = []
-    for i, question in enumerate(questions, 1):
-
-        # Exctract question
-        assert question.startswith(f"# {i}.")
-        index = question.strip().rfind("\n- A. ")
-        question, answers = map(str.strip, (question[:index], question[index:]))
-        questions_result.append(question)
-
-        # Exctract answers
-        answer_dict = {}
-        for letter, answer in zip(string.ascii_uppercase, answers.splitlines()):
-            assert answer.startswith(f"- {letter}. "), (question, letter, answer)
-            _, answer = answer.split(f"- {letter}. ", maxsplit=2)
-            answer_dict[letter] = answer.strip()
-        answers_result.append((answers, answer_dict))
-
-    mcq = namedtuple("mcq", "title, description, header, questions, answers, footer")
-    return mcq(title, description, header, questions_result, answers_result, footer)
-
-
-async def _run_mcq(app_session, mcq_filename, result_dict, dump=None):
+async def run_mcq_prompts(app_session, mcq_filename, result_dict, dump=None):
     swapped = False
     bindings = KeyBindings()
     prompt_sesion = PromptSession(key_bindings=bindings)
@@ -117,6 +65,8 @@ async def _run_mcq(app_session, mcq_filename, result_dict, dump=None):
         swap_light_and_dark_colors=Condition(lambda: swapped),
     )
     result_dict["name"] = name
+    if dump is not None:
+        dump(result_dict)
 
     # Loop over entries
     for i, (question, (answers, answer_dict)) in enumerate(
@@ -128,7 +78,9 @@ async def _run_mcq(app_session, mcq_filename, result_dict, dump=None):
             term = app_session.output.term
             columns = app_session.output.get_size().columns
             ansi_question = md_render(question + "\n\n" + answers, term, columns)
-            html_prompt = f'⦗ {i} ⦘ <style fg="#aaaaaa">{"/".join(answer_dict)}?</style> '
+            html_prompt = (
+                f'⦗ {i} ⦘ <style fg="#aaaaaa">{"/".join(answer_dict)}?</style> '
+            )
             return to_formatted_text(ANSI(ansi_question)) + to_formatted_text(
                 HTML(html_prompt)
             )
@@ -172,33 +124,21 @@ async def _run_mcq(app_session, mcq_filename, result_dict, dump=None):
     return result_dict
 
 
-def read_json(path):
-    try:
-        value = json.loads(path.read_text())
-    except (ValueError, json.JSONDecodeError, OSError):
-        value = {}
-    if not isinstance(value, dict):
-        value = {}
-    value.setdefault("name", "")
-    value.setdefault("answers", {})
-    value.setdefault("comment", "")
-    return value
-
-
-def write_json(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value))
-
-
 async def run_mcq(mcq_filename, result_dir, username):
     path = Path(result_dir) / f"{username}.json"
-    await _run_mcq(
-        get_app_session(),
-        mcq_filename,
-        read_json(path),
-        partial(write_json, path)
+    await run_mcq_prompts(
+        get_app_session(), mcq_filename, read_json(path), partial(write_json, path)
     )
 
 
+def main(args=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--username", "-u", type=str, default="reference")
+    parser.add_argument("--result-dir", "-r", type=Path, default=Path("results"))
+    parser.add_argument("mcq_filename", metavar="MCQ_FILE", type=Path)
+    namespace = parser.parse_args(args)
+    asyncio.run(run_mcq(namespace.mcq_filename, namespace.result_dir, namespace.username))
+
+
 if __name__ == "__main__":
-    asyncio.run(run_mcq("example/mcq-example.md", "results", "reference"))
+    main()

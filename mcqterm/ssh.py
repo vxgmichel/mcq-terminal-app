@@ -35,14 +35,13 @@ def show_add_authorized_keys_help(process):
 
 
 class UserClaimableSSHServer(asyncssh.SSHServer):
-
     def __init__(
         self,
         authenticated_process_factory,
         user_claim_password,
         external_address,
         authorized_keys_dir,
-            extra_config,
+        extra_config,
     ):
         self._log_info = {}
         self._extra_config = extra_config
@@ -101,7 +100,9 @@ class UserClaimableSSHServer(asyncssh.SSHServer):
                 LOGGER.info(f"Running command", **self._log_info)
                 return await self.process_command_handler(process, process.command)
         except Exception:
-            LOGGER.exception("Unexpected exception in process handler", **self._log_info)
+            LOGGER.exception(
+                "Unexpected exception in process handler", **self._log_info
+            )
             return process.exit(1)
 
     async def process_command_handler(self, process, command):
