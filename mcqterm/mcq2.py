@@ -28,6 +28,11 @@ from prompt_toolkit.widgets import (
 
 from .mcqcommon import parse_mcq, md_render, read_json, write_json
 
+NAME_PROMPT = "Please enter your name"
+BEGIN_TEXT = "Begin"
+NEXT_TEXT = "Next"
+PREVIOUS_TEXT = "Previous"
+EXIT_TEXT = "Exit"
 
 STYLE = Style.from_dict(
     {
@@ -132,7 +137,7 @@ class MCQApp:
 
     def _make_first_body(self):
         label = Label(text=self.render(self.description), dont_extend_height=True)
-        label2 = Label(text="\nPlease enter your name:", dont_extend_height=True)
+        label2 = Label(text=f"\n{NAME_PROMPT}:", dont_extend_height=True)
         return [label, label2, self.name_input]
 
     def _make_last_body(self):
@@ -142,16 +147,17 @@ class MCQApp:
     def _make_dialog(self, current, title, body):
         if current == 0:
             buttons = [
-                Button(text="Begin", handler=self.next_handler),
+                Button(text=BEGIN_TEXT, handler=self.next_handler),
             ]
         elif current == len(self.answers) + 1:
             buttons = [
-                Button(text="Exit", handler=self.exit_handler),
+                Button(text=PREVIOUS_TEXT, handler=self.previous_handler),
+                Button(text=EXIT_TEXT, handler=self.exit_handler),
             ]
         else:
             buttons = [
-                Button(text="Previous", handler=self.previous_handler),
-                Button(text="Next", handler=self.next_handler),
+                Button(text=PREVIOUS_TEXT, handler=self.previous_handler),
+                Button(text=NEXT_TEXT, handler=self.next_handler),
             ]
         return Dialog(
             title=title,
@@ -164,6 +170,8 @@ class MCQApp:
         bindings = KeyBindings()
         bindings.add("tab")(focus_next)
         bindings.add("s-tab")(focus_previous)
+        bindings.add("right")(focus_next)
+        bindings.add("left")(focus_previous)
         bindings.add("c-c")(self.exit_handler)
         bindings.add("c-d")(self.exit_handler)
         return bindings
