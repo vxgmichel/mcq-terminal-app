@@ -3,6 +3,8 @@ MCQ Terminal Application
 
 An MCQ terminal application served over SSH.
 
+[![asciicast](https://asciinema.org/a/avGH8G8NvpihPiwTXQoZsxTVU.svg)](https://asciinema.org/a/avGH8G8NvpihPiwTXQoZsxTVU)
+
 Requires [glow](https://github.com/charmbracelet/glow/releases) to be installed and accessible.
 
 Example usage:
